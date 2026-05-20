@@ -1,12 +1,22 @@
 import React, { useState } from "react";
 import AutoBottomCrashLockGenerator from "./CrashBottom";
+import AutoBottomComponent from "./Autobottom";
+import SnapBottomComponent from "./Snapbottom";
 import Rtibox from "./Rtibox";
 import DielineGeneratorCombo from "./STE_STI";
 
 const COMPONENTS = {
-  CrashBottom: {
-    label: "Crash Bottom",
-    component: AutoBottomCrashLockGenerator,
+  // CrashBottom: {
+  //   label: "Crash Bottom",
+  //   component: AutoBottomCrashLockGenerator,
+  // },
+  AutoBottom: {
+    label: "Auto Bottom",
+    component: AutoBottomComponent,
+  },
+  SnapBottom: {
+    label: "Snap Bottom",
+    component: SnapBottomComponent,
   },
   Rtibox: {
     label: "RTI Box",

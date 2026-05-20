@@ -1,5 +1,4 @@
-import React, { useMemo, useState, useReducer, useRef, useCallback } from "react";
-
+import React, { useMemo, useState, useReducer, useRef, useCallback, useEffect } from "react";
 const round = (n) => Number(n.toFixed(3));
 
 // ============================================================
@@ -14,7 +13,15 @@ const UNIT_CONFIGS = {
 // ============================================================
 // REDUCER FOR UNDO/REDO HISTORY
 // ============================================================
-const INITIAL_DIM = { L: 100, W: 30, H: 92, t: 0.5, glue: 16, A: 15, B: 23 };
+const INITIAL_DIM = {
+  L: 100,
+  W: 30,
+  H: 92,
+  t: 0.5,
+  glue: 10,
+  A: 15,
+  B: round((30 + 15) / 2), // Default B = (W + A) / 2
+};
 const MAX_HISTORY = 50;
 
 const historyReducer = (state, action) => {
@@ -55,7 +62,13 @@ const DielineGenerator = () => {
   });
 
   const svgRef = useRef(null);
-  const dim = history.present; // always in mm internally
+
+// Length measurement states
+const [cutLengthMM, setCutLengthMM] = useState(0);
+const cutLayerRef = useRef(null);
+
+const dim = history.present;
+// always in mm internally
   const unitCfg = UNIT_CONFIGS[unit];
 
   // Convert display value → mm on input change
@@ -75,12 +88,23 @@ const DielineGenerator = () => {
     const { L, W, H, t, glue, A, B } = dim;
     let warnings = [];
 
-    // ----------------------------------------------------------
-    // 1. BOARD THICKNESS COMPENSATION
-    // ----------------------------------------------------------
-    const cL = round(L + t);
-    const cW = round(W + t);
-    const cH = round(H + t * 2);
+   // ----------------------------------------------------------
+// 1. OUTER / INNER DIMENSION LOGIC
+// ----------------------------------------------------------
+// User input is OUTER / final box size.
+// Dieline body panels use outer size.
+// Inner size is calculated separately for display/reference.
+const outerL = round(L);
+const outerW = round(W);
+const outerH = round(H);
+
+const innerL = round(Math.max(0, L - t));
+const innerW = round(Math.max(0, W - t));
+const innerH = round(Math.max(0, H - t * 2));
+
+const cL = outerL;
+const cW = outerW;
+const cH = outerH;
 
     // ----------------------------------------------------------
     // 2. FLAP VALIDATION
@@ -261,18 +285,58 @@ const DielineGenerator = () => {
       { id: "Crease_BotTuckScore",   x1: round(x3 + tuckRadius), y1: bottomScoreY, x2: round(x4 - tuckRadius), y2: bottomScoreY },
     ];
 
+// Mathematical calculation for crease line total length
+const totalCreaseLengthMM = creaseLines.reduce((sum, line) => {
+  return sum + Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
+}, 0);
+
     return {
-      designW, designH, trimPath, trimReliefPaths, creaseLines,
-      warnings, cL, cW, cH, safeA, safeB,
-    };
+  designW,
+  designH,
+  trimPath,
+  trimReliefPaths,
+  creaseLines,
+  warnings,
+totalCreaseLengthMM,
+
+  outerL,
+  outerW,
+  outerH,
+
+  innerL,
+  innerW,
+  innerH,
+
+  cL,
+  cW,
+  cH,
+  safeA,
+  safeB,
+};
   }, [dim, unit, unitCfg]);
+
+// Measure cut paths physically from the SVG canvas
+useEffect(() => {
+  if (cutLayerRef.current) {
+    let total = 0;
+    const paths = cutLayerRef.current.querySelectorAll("path");
+
+    paths.forEach((p) => {
+      if (p.getTotalLength) {
+        total += p.getTotalLength();
+      }
+    });
+
+    setCutLengthMM(total);
+  }
+}, [g.trimPath, g.trimReliefPaths]);
 
   // ============================================================
   // SVG EXPORT — LAYERED FOR ILLUSTRATOR / ARTIOS
   // ============================================================
   const downloadSVG = useCallback(() => {
     const svgMarkup = `<?xml version="1.0" encoding="UTF-8"?>
-<!-- ECMA Tuck End Dieline v2.0 | ${dim.L}x${dim.W}x${dim.H}mm -->
+<!-- Reverse Tuck Inside (RTI) Dieline | ${dim.L}x${dim.W}x${dim.H}mm -->
 <svg xmlns="http://www.w3.org/2000/svg"
      xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
      version="1.1"
@@ -280,7 +344,7 @@ const DielineGenerator = () => {
      height="${g.designH + 10}mm"
      viewBox="-5 -5 ${g.designW + 10} ${g.designH + 10}">
 
-  <title>ECMA Tuck End Dieline v2.0 — ${dim.L}x${dim.W}x${dim.H}mm</title>
+<title>Reverse Tuck Inside (RTI) — ${dim.L}x${dim.W}x${dim.H}mm</title>
 
   <!-- LAYER 1: CUT / TRIM LINES (Blue) -->
   <g id="Layer_Cut"
@@ -291,7 +355,7 @@ const DielineGenerator = () => {
       d="${g.trimPath}"
       fill="none"
       stroke="#1a2cb0"
-      stroke-width="0.35"
+      stroke-width="0.23"
       stroke-linejoin="round"
       stroke-linecap="butt"
       vector-effect="non-scaling-stroke" />
@@ -300,7 +364,7 @@ ${g.trimReliefPaths.map((d, i) => `    <path
       d="${d}"
       fill="none"
       stroke="#1a2cb0"
-      stroke-width="0.35"
+      stroke-width="0.23"
       stroke-linejoin="round"
       stroke-linecap="butt"
       vector-effect="non-scaling-stroke" />`).join("\n")}
@@ -316,7 +380,7 @@ ${g.creaseLines.map((l) => `    <line
       x2="${l.x2}" y2="${l.y2}"
       fill="none"
       stroke="#ff0000"
-      stroke-width="0.25"
+      stroke-width="0.23"
       stroke-linecap="butt"
       vector-effect="non-scaling-stroke" />`).join("\n")}
   </g>
@@ -341,14 +405,14 @@ ${g.creaseLines.map((l) => `    <line
   const canRedo = history.future.length > 0;
 
   const inputFields = [
-    ["L", "Internal Length"],
-    ["W", "Internal Width"],
-    ["H", "Internal Height"],
-    ["t", "Board Thickness"],
-    ["glue", "Glue Flap Width"],
-    ["A", "Tuck Flap (A)"],
-    ["B", "Dust Flap (B)"],
-  ];
+  ["L", "Length"],
+  ["W", "Width"],
+  ["H", "Height"],
+  ["t", "Board Thickness"],
+  ["glue", "Glue Flap Width"],
+  ["A", "Tuck Flap"],
+  ["B", "Dust Flap"],
+];
 
   return (
     <div style={{ padding: 24, display: "flex", gap: 24, fontFamily: "system-ui, sans-serif", backgroundColor: "#f0f2f5", minHeight: "100vh" }}>
@@ -358,7 +422,7 @@ ${g.creaseLines.map((l) => `    <line
 
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h3 style={{ margin: 0, color: "#1a1a2e", fontSize: 15 }}>📦 Dieline Setup v2.0</h3>
+          <h3 style={{ margin: 0, color: "#1a1a2e", fontSize: 15 }}>📦 Reverse Tuck Inside (RTI)</h3>
           <span style={{ fontSize: 11, color: "#888", background: "#f0f2f5", padding: "2px 8px", borderRadius: 99 }}>ECMA</span>
         </div>
 
@@ -453,28 +517,62 @@ ${g.creaseLines.map((l) => `    <line
           ⬇ Download Layered SVG
         </button>
 
-        {/* Spec Table */}
-        <div style={{ marginTop: 16, padding: 12, background: "#f8f9ff", borderRadius: 8, fontSize: 11 }}>
-          <div style={{ fontWeight: 700, color: "#1a2cb0", marginBottom: 6 }}>Compensated Dimensions</div>
-          {[["Flat Length", g.cL], ["Flat Width", g.cW], ["Flat Height", g.cH]].map(([label, val]) => (
-            <div key={label} style={{ display: "flex", justifyContent: "space-between", color: "#444", marginBottom: 3 }}>
-              <span>{label}</span>
-              <strong>{round(unitCfg.fromMM(val))} {unit}</strong>
-            </div>
-          ))}
-        </div>
-      </div>
+	{/* Dimension Table */}
+<div style={{ marginTop: 16, padding: 12, background: "#f8f9ff", borderRadius: 8, fontSize: 11 }}>
+  <div style={{ fontWeight: 700, color: "#1a2cb0", marginBottom: 8 }}>
+    Box Dimensions
+  </div>
+
+  <div style={{ display: "flex", justifyContent: "space-between", color: "#444", marginBottom: 6 }}>
+    <span>Outer Dimension</span>
+    <strong>
+      {round(unitCfg.fromMM(g.outerL))} × {round(unitCfg.fromMM(g.outerW))} × {round(unitCfg.fromMM(g.outerH))} {unit}
+    </strong>
+  </div>
+
+  <div style={{ display: "flex", justifyContent: "space-between", color: "#444" }}>
+    <span>Inner Dimension</span>
+    <strong>
+      {round(unitCfg.fromMM(g.innerL))} × {round(unitCfg.fromMM(g.innerW))} × {round(unitCfg.fromMM(g.innerH))} {unit}
+    </strong>
+  </div>
+</div>
+
+  </div>
 
       {/* ── SVG PREVIEW ── */}
       <div style={{ flex: 1, background: "#fff", borderRadius: 12, padding: 32, overflow: "auto", boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
-        <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 12, color: "#888" }}>
-            Canvas: <strong>{round(unitCfg.fromMM(g.designW))}</strong> × <strong>{round(unitCfg.fromMM(g.designH))}</strong> {unit}
-          </span>
-          <div style={{ display: "flex", gap: 14, fontSize: 11 }}>
-            <span style={{ color: "#1a2cb0" }}>■ Cut Lines</span>
-            <span style={{ color: "#ff0000" }}>■ Crease Lines</span>
-          </div>
+        <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div style={{ fontSize: 12, color: "#888", lineHeight: 1.7 }}>
+  <div>
+    Canvas: <strong>{round(unitCfg.fromMM(g.designW))}</strong> ×{" "}
+    <strong>{round(unitCfg.fromMM(g.designH))}</strong> {unit}
+  </div>
+
+  <div>
+    Outer Dimension ={" "}
+    <strong>
+      {round(unitCfg.fromMM(g.outerL))} × {round(unitCfg.fromMM(g.outerW))} × {round(unitCfg.fromMM(g.outerH))} {unit}
+    </strong>
+  </div>
+
+  <div>
+    Inner Dimension ={" "}
+    <strong>
+      {round(unitCfg.fromMM(g.innerL))} × {round(unitCfg.fromMM(g.innerW))} × {round(unitCfg.fromMM(g.innerH))} {unit}
+    </strong>
+  </div>
+</div>
+
+         <div style={{ display: "flex", gap: 14, fontSize: 11 }}>
+  <span style={{ color: "#1a2cb0" }}>
+    ■ Cut Lines <strong>({((cutLengthMM || 0) / 10).toFixed(1)} cm)</strong>
+  </span>
+
+  <span style={{ color: "#ff0000" }}>
+    ■ Crease Lines <strong>({((g.totalCreaseLengthMM || 0) / 10).toFixed(1)} cm)</strong>
+  </span>
+</div>
         </div>
 
         <svg
@@ -485,10 +583,10 @@ ${g.creaseLines.map((l) => `    <line
           style={{ minWidth: 600, display: "block" }}
         >
           {/* Cut Layer */}
-          <g id="Layer_Cut">
-            <path d={g.trimPath} fill="none" stroke="#1a2cb0" strokeWidth="0.8" strokeLinejoin="round" strokeLinecap="butt" />
+          <g id="Layer_Cut" ref={cutLayerRef}>
+            <path d={g.trimPath} fill="none" stroke="#1a2cb0" strokeWidth="0.23" strokeLinejoin="round" strokeLinecap="butt" />
             {g.trimReliefPaths.map((d, i) => (
-              <path key={i} d={d} fill="none" stroke="#1a2cb0" strokeWidth="0.8" strokeLinejoin="round" strokeLinecap="butt" />
+              <path key={i} d={d} fill="none" stroke="#1a2cb0" strokeWidth="0.23" strokeLinejoin="round" strokeLinecap="butt" />
             ))}
           </g>
 
@@ -496,7 +594,7 @@ ${g.creaseLines.map((l) => `    <line
           <g id="Layer_Crease">
             {g.creaseLines.map((line) => (
               <line key={line.id} id={line.id} x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2}
-                fill="none" stroke="#ff0000" strokeWidth="0.6" strokeLinecap="butt" />
+                fill="none" stroke="#ff0000" strokeWidth="0.23" strokeLinecap="butt" />
             ))}
           </g>
         </svg>

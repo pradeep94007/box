@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useReducer, useRef, useCallback } from "react";
+import React, { useMemo, useState, useReducer, useRef, useCallback, useEffect } from "react";
 
 const round = (n) => Number(n.toFixed(3));
 
@@ -8,7 +8,7 @@ const UNIT_CONFIGS = {
   inch: { label: "Inches (in)",      toMM: (v) => v * 25.4, fromMM: (v) => v / 25.4, step: 0.001, decimals: 3 },
 };
 
-const INITIAL_DIM = { L: 100, W: 30, H: 92, t: 0.5, glue: 16, A: 15, B: 23 };
+const INITIAL_DIM = { L: 100, W: 30, H: 92, t: 0.5, glue: 10, A: 15, B: 22.5 };
 const MAX_HISTORY = 50;
 
 const historyReducer = (state, action) => {
@@ -47,6 +47,10 @@ const DielineGeneratorCombo = () => {
     past: [], present: INITIAL_DIM, future: [],
   });
   const svgRef = useRef(null);
+  const cutLayerRef = useRef(null);
+  const creaseLayerRef = useRef(null);
+  const [cutLengthMM, setCutLengthMM] = useState(0);
+  const [creaseLengthMM, setCreaseLengthMM] = useState(0);
   const dim = history.present;
   const unitCfg = UNIT_CONFIGS[unit];
 
@@ -61,25 +65,33 @@ const DielineGeneratorCombo = () => {
     const { L, W, H, t, glue, A, B } = dim;
     const warnings = [];
 
-    // ── 1. COMPENSATION ───────────────────────────────────────
-    const cL = round(L + t);
-    const cW = round(W + t);
-    const cH = round(H + t * 2);
+    // ── 1. OUTER / INNER DIMENSION LOGIC ─────────────────────
+    // L/W/H input is treated as the final outside box size.
+    const outerL = L;
+    const outerW = W;
+    const outerH = H;
 
-    // ── 2. VALIDATION (UPDATED CAP FOR DUST FLAP B) ───────────
+    const innerL = round(Math.max(0, outerL - t));
+    const innerW = round(Math.max(0, outerW - t));
+    const innerH = round(Math.max(0, outerH - t * 2));
+
+    // Main geometry uses outer/final dimensions.
+    const cL = round(outerL);
+    const cW = round(outerW);
+    const cH = round(outerH);
+
+    // ── 2. VALIDATION ─────────────────────────────────────────
     let safeA = A, safeB = B;
     const maxA = round(cW - 1);
     if (A > maxA) { 
       warnings.push(`Tuck flap (A) capped at ${round(unitCfg.fromMM(maxA))}${unit}.`); 
       safeA = maxA; 
     }
-    
-    // Strict Box Width Max Cap - removes cL/2 limitation entirely
     const maxB = cW; 
-    if (B > maxB) { 
-      warnings.push(`Dust flap (B) capped at box width ${round(unitCfg.fromMM(maxB))}${unit}.`); 
-      safeB = maxB; 
-    }
+if (B > maxB) { 
+  warnings.push(`Dust flap (B) capped at box width ${round(unitCfg.fromMM(maxB))}${unit}.`); 
+  safeB = maxB; 
+}
 
     // ── 3. MICRO-GEOMETRY ─────────────────────────────────────
     const glueAngleDeg    = 15;
@@ -154,7 +166,7 @@ const DielineGeneratorCombo = () => {
     let creaseLines = [];
 
     if (dielineType === "A") {
-      // ── TYPE A ENGINES ──────────────────────────────────────
+      // ── TYPE A ENGINES (CORRECTED BOTTOM ROW STEP-UP) ───────
       trimPath = `
         M ${x0},${round(topNarrow + glueBevelY)}
         L ${x1},${topNarrow}
@@ -240,7 +252,7 @@ const DielineGeneratorCombo = () => {
         { id: "Crease_BotDust_Mid2", x1: round(x4 + 1.065 * sScale), y1: bottomNarrow, x2: x5, y2: bottomNarrow },
       ];
     } else {
-      // ── TYPE B ENGINES ──────────────────────────────────────
+      // ── TYPE B ENGINES (STRUCTURAL BOTTOM FIXES COMPLETED) ──
       trimPath = `
         M ${x0},${topNarrow}
         L ${round(x0 + dBodyStepX)},${topNarrow}
@@ -334,9 +346,36 @@ const DielineGeneratorCombo = () => {
 
     return {
       designW, designH, trimPath, trimReliefPaths, creaseLines,
-      warnings, cL, cW, cH, safeA, safeB,
+      warnings, cL, cW, cH, outerL, outerW, outerH, innerL, innerW, innerH, safeA, safeB,
     };
   }, [dim, unit, unitCfg, dielineType]);
+
+  useEffect(() => {
+    const getPathLength = (layer) => {
+      if (!layer) return 0;
+      return Array.from(layer.querySelectorAll("path")).reduce((sum, path) => {
+        try {
+          return sum + path.getTotalLength();
+        } catch {
+          return sum;
+        }
+      }, 0);
+    };
+
+    const getLineLength = (layer) => {
+      if (!layer) return 0;
+      return Array.from(layer.querySelectorAll("line")).reduce((sum, line) => {
+        const x1 = parseFloat(line.getAttribute("x1") || "0");
+        const y1 = parseFloat(line.getAttribute("y1") || "0");
+        const x2 = parseFloat(line.getAttribute("x2") || "0");
+        const y2 = parseFloat(line.getAttribute("y2") || "0");
+        return sum + Math.hypot(x2 - x1, y2 - y1);
+      }, 0);
+    };
+
+    setCutLengthMM(round(getPathLength(cutLayerRef.current)));
+    setCreaseLengthMM(round(getLineLength(creaseLayerRef.current)));
+  }, [g]);
 
   const downloadSVG = useCallback(() => {
     const svgMarkup = `<?xml version="1.0" encoding="UTF-8"?>
@@ -347,11 +386,11 @@ const DielineGeneratorCombo = () => {
      viewBox="-5 -5 ${g.designW + 10} ${g.designH + 10}">
   <title>ECMA STE Type ${dielineType} — ${dim.L}x${dim.W}x${dim.H}mm</title>
   <g id="Layer_Cut" inkscape:label="Cut Lines" inkscape:groupmode="layer">
-    <path id="Trim_Main" d="${g.trimPath}" fill="none" stroke="#1a2cb0" stroke-width="0.35" stroke-linejoin="round" stroke-linecap="butt" vector-effect="non-scaling-stroke" />
-${g.trimReliefPaths.map((d, i) => `    <path id="Trim_Relief_${i + 1}" d="${d}" fill="none" stroke="#1a2cb0" stroke-width="0.35" stroke-linejoin="round" stroke-linecap="butt" vector-effect="non-scaling-stroke" />`).join("\n")}
+    <path id="Trim_Main" d="${g.trimPath}" fill="none" stroke="#1a2cb0" stroke-width="0.23" stroke-linejoin="round" stroke-linecap="butt" vector-effect="non-scaling-stroke" />
+${g.trimReliefPaths.map((d, i) => `    <path id="Trim_Relief_${i + 1}" d="${d}" fill="none" stroke="#1a2cb0" stroke-width="0.23" stroke-linejoin="round" stroke-linecap="butt" vector-effect="non-scaling-stroke" />`).join("\n")}
   </g>
   <g id="Layer_Crease" inkscape:label="Crease Lines" inkscape:groupmode="layer">
-${g.creaseLines.map((l) => `    <line id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" fill="none" stroke="#ff0000" stroke-width="0.25" stroke-linecap="butt" vector-effect="non-scaling-stroke" />`).join("\n")}
+${g.creaseLines.map((l) => `    <line id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" fill="none" stroke="#ff0000" stroke-width="0.23" stroke-linecap="butt" vector-effect="non-scaling-stroke" />`).join("\n")}
   </g>
 </svg>`;
     const blob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
@@ -365,7 +404,7 @@ ${g.creaseLines.map((l) => `    <line id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2=
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
   const inputFields = [
-    ["L","Internal Length"],["W","Internal Width"],["H","Internal Height"],
+    ["L","Length"],["W","Width"],["H","Height"],
     ["t","Board Thickness"],["glue","Glue Flap Width"],
     ["A","Tuck Flap (A)"],["B","Dust Flap (B)"],
   ];
@@ -374,8 +413,8 @@ ${g.creaseLines.map((l) => `    <line id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2=
     <div style={{ padding: 24, display: "flex", gap: 24, fontFamily: "system-ui, sans-serif", backgroundColor: "#f0f2f5", minHeight: "100vh" }}>
       <div style={{ width: 300, background: "#fff", borderRadius: 12, padding: 24, height: "fit-content", boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h3 style={{ margin: 0, color: "#1a1a2e", fontSize: 15 }}>📦 Dieline Setup</h3>
-          <span style={{ fontSize: 11, color: "#2e7d32", background: "#e8f5e9", padding: "2px 8px", borderRadius: 99, fontWeight: 700 }}>Combo v2.6</span>
+          <h3 style={{ margin: 0, color: "#1a1a2e", fontSize: 15 }}>📦 Straight Tuck Inside (STI)</h3>
+          
         </div>
 
         <div style={{ marginBottom: 16 }}>
@@ -420,6 +459,16 @@ ${g.creaseLines.map((l) => `    <line id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2=
           </div>
         )}
 
+        <div style={{ marginTop: 16, padding: 12, background: "#f1f8e9", borderRadius: 8, fontSize: 11 }}>
+          <div style={{ fontWeight: 700, color: "#2e7d32", marginBottom: 6 }}>Box Dimensions</div>
+          <div style={{ display: "flex", justifyContent: "space-between", color: "#444", marginBottom: 3 }}>
+            <span>Outer</span><strong>{round(unitCfg.fromMM(g.outerL))} × {round(unitCfg.fromMM(g.outerW))} × {round(unitCfg.fromMM(g.outerH))} {unit}</strong>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", color: "#444", marginBottom: 3 }}>
+            <span>Inner</span><strong>{round(unitCfg.fromMM(g.innerL))} × {round(unitCfg.fromMM(g.innerW))} × {round(unitCfg.fromMM(g.innerH))} {unit}</strong>
+          </div>
+        </div>
+
         <div style={{ height: 1, background: "#f0f2f5", margin: "14px 0" }} />
         <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
           <button onClick={() => dispatch({ type: "UNDO" })} disabled={!canUndo} style={{ flex: 1, padding: 8, border: "1px solid #ddd", borderRadius: 6, cursor: canUndo ? "pointer" : "not-allowed", background: canUndo ? "#fff" : "#f9f9f9", color: canUndo ? "#333" : "#bbb", fontSize: 13 }}>
@@ -439,26 +488,28 @@ ${g.creaseLines.map((l) => `    <line id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2=
       <div style={{ flex: 1, background: "#fff", borderRadius: 12, padding: 32, overflow: "auto", boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
         <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#1565c0" }}>ECMA STE Combo (Type {dielineType})</span>
-            <span style={{ fontSize: 11, color: "#888", marginLeft: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#1565c0" }}>Straight Tuck Inside (STI) - Type {dielineType}</span>
+            <div style={{ fontSize: 11, color: "#888", marginTop: 4, lineHeight: 1.6 }}>
               Canvas: <strong>{round(unitCfg.fromMM(g.designW))}</strong> × <strong>{round(unitCfg.fromMM(g.designH))}</strong> {unit}
-            </span>
+              &nbsp; | &nbsp; Outer Dimension: <strong>{round(unitCfg.fromMM(g.outerL))}</strong> × <strong>{round(unitCfg.fromMM(g.outerW))}</strong> × <strong>{round(unitCfg.fromMM(g.outerH))}</strong> {unit}
+              &nbsp; | &nbsp; Inner Dimension: <strong>{round(unitCfg.fromMM(g.innerL))}</strong> × <strong>{round(unitCfg.fromMM(g.innerW))}</strong> × <strong>{round(unitCfg.fromMM(g.innerH))}</strong> {unit}
+            </div>
           </div>
           <div style={{ display: "flex", gap: 14, fontSize: 11 }}>
-            <span style={{ color: "#1a2cb0" }}>■ Cut Lines</span>
-            <span style={{ color: "#ff0000" }}>■ Crease Lines</span>
+            <span style={{ color: "#1a2cb0" }}>■ Cut Lines ({round(cutLengthMM / 10)} cm)</span>
+            <span style={{ color: "#ff0000" }}>■ Crease Lines ({round(creaseLengthMM / 10)} cm)</span>
           </div>
         </div>
         <svg ref={svgRef} xmlns="http://www.w3.org/2000/svg" width="100%" viewBox={`-5 -5 ${g.designW + 10} ${g.designH + 10}`} style={{ minWidth: 600, display: "block" }}>
-          <g id="Layer_Cut">
-            <path d={g.trimPath} fill="none" stroke="#1a2cb0" strokeWidth="0.8" strokeLinejoin="round" strokeLinecap="butt" />
+          <g id="Layer_Cut" ref={cutLayerRef}>
+            <path d={g.trimPath} fill="none" stroke="#1a2cb0" strokeWidth="0.23" strokeLinejoin="round" strokeLinecap="butt" />
             {g.trimReliefPaths.map((d, i) => (
-              <path key={i} d={d} fill="none" stroke="#1a2cb0" strokeWidth="0.8" strokeLinejoin="round" strokeLinecap="butt" />
+              <path key={i} d={d} fill="none" stroke="#1a2cb0" strokeWidth="0.23" strokeLinejoin="round" strokeLinecap="butt" />
             ))}
           </g>
-          <g id="Layer_Crease">
+          <g id="Layer_Crease" ref={creaseLayerRef}>
             {g.creaseLines.map((line) => (
-              <line key={line.id} id={line.id} x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} fill="none" stroke="#ff0000" strokeWidth="0.6" strokeLinecap="butt" />
+              <line key={line.id} id={line.id} x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} fill="none" stroke="#ff0000" strokeWidth="0.23" strokeLinecap="butt" />
             ))}
           </g>
         </svg>
