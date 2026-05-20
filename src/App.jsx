@@ -6,10 +6,10 @@ import Rtibox from "./Rtibox";
 import DielineGeneratorCombo from "./STE_STI";
 
 const COMPONENTS = {
-  // CrashBottom: {
-  //   label: "Crash Bottom",
-  //   component: AutoBottomCrashLockGenerator,
-  // },
+  CrashBottom: {
+    label: "Crash Bottom",
+    component: AutoBottomCrashLockGenerator,
+  },
   AutoBottom: {
     label: "Auto Bottom",
     component: AutoBottomComponent,
@@ -42,25 +42,27 @@ const App = () => {
       </header>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>
-        {Object.entries(COMPONENTS).map(([key, item]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setActiveKey(key)}
-            style={{
-              padding: "12px 18px",
-              borderRadius: 8,
-              border: activeKey === key ? "2px solid #1f6feb" : "1px solid #cbd5e1",
-              background: activeKey === key ? "#1f6feb" : "#ffffff",
-              color: activeKey === key ? "#ffffff" : "#111827",
-              cursor: "pointer",
-              boxShadow: activeKey === key ? "0 8px 20px rgba(31,111,235,0.18)" : "0 0 0 0 transparent",
-              transition: "all 0.16s ease",
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
+        {Object.entries(COMPONENTS)
+          .filter(([key]) => key !== "CrashBottom")
+          .map(([key, item]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveKey(key)}
+              style={{
+                padding: "12px 18px",
+                borderRadius: 8,
+                border: activeKey === key ? "2px solid #1f6feb" : "1px solid #cbd5e1",
+                background: activeKey === key ? "#1f6feb" : "#ffffff",
+                color: activeKey === key ? "#ffffff" : "#111827",
+                cursor: "pointer",
+                boxShadow: activeKey === key ? "0 8px 20px rgba(31,111,235,0.18)" : "0 0 0 0 transparent",
+                transition: "all 0.16s ease",
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
       </div>
 
       <section style={{ padding: 20, borderRadius: 16, background: "#ffffff", boxShadow: "0 12px 40px rgba(0,0,0,0.04)" }}>
