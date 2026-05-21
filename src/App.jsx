@@ -29,7 +29,7 @@ const COMPONENTS = {
 };
 
 const App = () => {
-  const [activeKey, setActiveKey] = useState("CrashBottom");
+  const [activeKey, setActiveKey] = useState("AutoBottom");
   const ActiveComponent = COMPONENTS[activeKey].component;
 
   return (
@@ -52,12 +52,14 @@ const App = () => {
               style={{
                 padding: "12px 18px",
                 borderRadius: 8,
-                border: activeKey === key ? "2px solid #1f6feb" : "1px solid #cbd5e1",
+                border: "2px solid",
+                borderColor: activeKey === key ? "#1f6feb" : "#cbd5e1",
                 background: activeKey === key ? "#1f6feb" : "#ffffff",
                 color: activeKey === key ? "#ffffff" : "#111827",
                 cursor: "pointer",
                 boxShadow: activeKey === key ? "0 8px 20px rgba(31,111,235,0.18)" : "0 0 0 0 transparent",
                 transition: "all 0.16s ease",
+                boxSizing: "border-box",
               }}
             >
               {item.label}
