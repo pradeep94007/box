@@ -16,8 +16,8 @@ const AutoBottomCrashLockGenerator = () => {
     H: 100,
     t: 0.5,
     glue: 10,
-    A: 26,
-    B: 33,
+    A: 10,
+    B: 25,
     bottomExtra: 10,
   });
 

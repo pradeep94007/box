@@ -19,8 +19,8 @@ const INITIAL_DIM = {
   H: 92,
   t: 0.5,
   glue: 10,
-  A: 15,
-  B: round((30 + 15) / 2), // Default B = (W + A) / 2
+  A: 10,
+  B: round((30 + 10) / 2), // Default B = (W + A) / 2
 };
 const MAX_HISTORY = 50;
 

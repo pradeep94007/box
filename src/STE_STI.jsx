@@ -8,7 +8,7 @@ const UNIT_CONFIGS = {
   inch: { label: "Inches (in)",      toMM: (v) => v * 25.4, fromMM: (v) => v / 25.4, step: 0.001, decimals: 3 },
 };
 
-const INITIAL_DIM = { L: 100, W: 30, H: 92, t: 0.5, glue: 10, A: 15, B: 22.5 };
+const INITIAL_DIM = { L: 100, W: 30, H: 92, t: 0.5, glue: 10, A: 10, B: 20 };
 const MAX_HISTORY = 50;
 
 const historyReducer = (state, action) => {
