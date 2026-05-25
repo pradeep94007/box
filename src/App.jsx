@@ -4,6 +4,8 @@ import AutoBottomComponent from "./Autobottom";
 import SnapBottomComponent from "./Snapbottom";
 import Rtibox from "./Rtibox";
 import DielineGeneratorCombo from "./STE_STI";
+import Flapbox from "./Flapbox";
+import Mailerbox from "./Mailerbox";
 
 const COMPONENTS = {
   CrashBottom: {
@@ -25,6 +27,14 @@ const COMPONENTS = {
   STE_STI: {
     label: "STE / STI",
     component: DielineGeneratorCombo,
+  },
+  Flapbox: {
+    label: "Flapbox",
+    component: Flapbox,
+  },
+  Mailerbox: {
+    label: "Mailerbox",
+    component: Mailerbox,
   },
 };
 
