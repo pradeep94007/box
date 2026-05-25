@@ -3,30 +3,30 @@ import React, { useMemo, useState, useReducer, useRef, useCallback, useEffect } 
 const round = (n) => Number(n.toFixed(3));
 
 const UNIT_CONFIGS = {
-  mm:   { label: "Millimeters (mm)", toMM: (v) => v,        fromMM: (v) => v,        step: 0.1,   decimals: 1 },
-  cm:   { label: "Centimeters (cm)", toMM: (v) => v * 10,   fromMM: (v) => v / 10,   step: 0.01,  decimals: 2 },
-  inch: { label: "Inches (in)",      toMM: (v) => v * 25.4, fromMM: (v) => v / 25.4, step: 0.001, decimals: 3 },
+  mm: { label: "Millimeters (mm)", toMM: (v) => v, fromMM: (v) => v, step: 0.1, decimals: 1 },
+  cm: { label: "Centimeters (cm)", toMM: (v) => v * 10, fromMM: (v) => v / 10, step: 0.01, decimals: 2 },
+  inch: { label: "Inches (in)", toMM: (v) => v * 25.4, fromMM: (v) => v / 25.4, step: 0.001, decimals: 3 },
 };
 
-const INITIAL_DIM = { L: 100, W: 30, H: 92, t: 0.5, glue: 10, A: 10, B: 20 };
+const INITIAL_DIM = { L: 100, W: 30, H: 92, t: 0.5, glue: 10, A: 15, B: 22.5 };
 const MAX_HISTORY = 50;
 
 const historyReducer = (state, action) => {
   switch (action.type) {
     case "UPDATE": {
-      const newDim  = { ...state.present, [action.key]: action.value };
+      const newDim = { ...state.present, [action.key]: action.value };
       const newPast = [...state.past, state.present].slice(-MAX_HISTORY);
       return { past: newPast, present: newDim, future: [] };
     }
     case "UNDO": {
       if (state.past.length === 0) return state;
       const previous = state.past[state.past.length - 1];
-      const newPast  = state.past.slice(0, -1);
+      const newPast = state.past.slice(0, -1);
       return { past: newPast, present: previous, future: [state.present, ...state.future] };
     }
     case "REDO": {
       if (state.future.length === 0) return state;
-      const next      = state.future[0];
+      const next = state.future[0];
       const newFuture = state.future.slice(1);
       return { past: [...state.past, state.present], present: next, future: newFuture };
     }
@@ -83,47 +83,48 @@ const DielineGeneratorCombo = () => {
     // ── 2. VALIDATION ─────────────────────────────────────────
     let safeA = A, safeB = B;
     const maxA = round(cW - 1);
-    if (A > maxA) { 
-      warnings.push(`Tuck flap (A) capped at ${round(unitCfg.fromMM(maxA))}${unit}.`); 
-      safeA = maxA; 
+    if (A > maxA) {
+      warnings.push(`Tuck flap (A) capped at ${round(unitCfg.fromMM(maxA))}${unit}.`);
+      safeA = maxA;
     }
-    const maxB = cW; 
-if (B > maxB) { 
-  warnings.push(`Dust flap (B) capped at box width ${round(unitCfg.fromMM(maxB))}${unit}.`); 
-  safeB = maxB; 
-}
+    const maxB = cW;
+    if (B > maxB) {
+      warnings.push(`Dust flap (B) capped at box width ${round(unitCfg.fromMM(maxB))}${unit}.`);
+      safeB = maxB;
+    }
 
     // ── 3. MICRO-GEOMETRY ─────────────────────────────────────
-    const glueAngleDeg    = 15;
-    const glueBevelY      = round(glue * Math.tan((glueAngleDeg * Math.PI) / 180));
-    const tuckFront       = safeA;
+    const glueAngleDeg = 15;
+    const glueBevelY = round(glue * Math.tan((glueAngleDeg * Math.PI) / 180));
+    const tuckFront = safeA;
     const tuckScoreOffset = 0.75;
-   
-    const tuckShoulderY   = round(tuckFront - tuckScoreOffset);
-    const tuckSideRelief  = 0.5;
-    const maxTuckRadius   = Math.min(12, safeA * 0.6, cL / 2 - tuckSideRelief - 0.5);
-    const tuckRadius      = Math.max(2, maxTuckRadius);
-    const dustH           = safeB;
-    const sScale          = Math.min(1, cW / 12, safeB / 9);
-    const dTinyX          = 0.61  * sScale;
-    const dTinyY          = 0.149 * sScale;
-    const dReliefX        = 1.186 * sScale;
-    const dReliefY        = 0.132 * sScale;
-    const dSlopeX         = 3.5   * sScale;
-    const dSlopeY         = 3.5   * sScale;
-    const dShoulderX      = 2.3   * sScale;
-    const dShoulderY      = 8.0   * sScale;
-    const dBodyStepX      = 0.3   * sScale;
-    const dBodyStepY      = 6.0   * sScale;
 
-    let dTopInsetL = dSlopeX    + Math.max(0, safeB - dSlopeY)    * (1.0   / 19.5);
+    const tuckShoulderY = round(tuckFront - tuckScoreOffset);
+    const tuckSideRelief = 0.5;
+    const maxTuckRadius = Math.min(12, safeA * 0.6, cL / 2 - tuckSideRelief - 0.5);
+    const tuckRadius = Math.max(2, maxTuckRadius);
+    const dustH = safeB;
+    const sScale = Math.min(1, cW / 12, safeB / 9);
+    const dTinyX = 0.61 * sScale;
+    const dTinyY = 0.149 * sScale;
+    const dReliefX = 1.186 * sScale;
+    const dReliefY = 0.132 * sScale;
+    // RTI V2 approved dust flap shape
+    const dSlopeX = 3.0 * sScale;
+    const dSlopeY = 3.0 * sScale;
+    const dShoulderX = 2.3 * sScale;
+    const dShoulderY = 6.0 * sScale;
+    const dBodyStepX = 0.35 * sScale;
+    const dBodyStepY = 4.0 * sScale;
+
+    let dTopInsetL = dSlopeX + Math.max(0, safeB - dSlopeY) * (1.0 / 19.5);
     let dTopInsetR = dShoulderX + Math.max(0, safeB - dShoulderY) * (4.259 / 15.0);
     const minFlatTop = 1.0;
-    
+
     const clampInsets = (iL, iR, width) => {
       if (iL + iR > width - minFlatTop) {
         const excess = iL + iR - (width - minFlatTop);
-        const total  = iL + iR;
+        const total = iL + iR;
         return [iL - excess * (iL / total), iR - excess * (iR / total)];
       }
       return [iL, iR];
@@ -138,7 +139,8 @@ if (B > maxB) {
       x2 = round(x1 + cL);
       x3 = round(x2 + cW);
       x4 = round(x3 + cL);
-      x5 = round(x4 + (cW - t));
+      const panel4WidthComp = t <= 0.3 ? 0 : t <= 1 ? 0.5 : t;
+      x5 = round(x4 + (cW - panel4WidthComp));
     } else {
       x0 = 0;
       x1 = round(cW - t);
@@ -149,16 +151,29 @@ if (B > maxB) {
     }
 
     // ── 5. ROW Y COORDINATES ──────────────────────────────────
-    const topWide      = round(cW + tuckShoulderY);
-    const topNarrow    = round(topWide + t);
-    const bottomNarrow = round(topWide + cH);
-    const bottomWide   = round(bottomNarrow + t);
+
+    // STI/STE Type A body compensation
+    const bodyShift = t <= 0.3 ? 0 : t;
+
+    // Top levels
+    const topWide = round(cW + tuckShoulderY);
+    const topNarrow = round(topWide + bodyShift);
+
+    // Full-height panel body bottom
+    const bodyBottomFull = round(topWide + cH);
+
+    // Reduced-height panels
+    const bodyBottomReduced = round(bodyBottomFull - bodyShift);
+
+    // Bottom levels
+    const bottomNarrow = bodyBottomReduced;
+    const bottomWide = bodyBottomFull;
 
     const designW = round(x5);
     const designH = round(bottomWide + topWide);
 
-    const topScoreY       = tuckFront;
-    const bottomScoreY    = round(designH - tuckFront);
+    const topScoreY = tuckFront;
+    const bottomScoreY = round(designH - tuckFront);
     const bottomShoulderY = round(designH - tuckShoulderY);
 
     let trimPath = "";
@@ -178,19 +193,16 @@ if (B > maxB) {
         A ${tuckRadius},${tuckRadius} 0 0 1 ${round(x2 - tuckSideRelief)},${tuckRadius}
         L ${round(x2 - tuckSideRelief)},${tuckShoulderY}
         L ${x2},${tuckShoulderY}
-        L ${x2},${topWide}
-        
-        L ${round(x2 + dTinyX)},${round(topNarrow + dTinyY)}
-        L ${round(x2 + dReliefX)},${round(topNarrow - dReliefY)}
-        L ${round(x2 + dSlopeX)},${round(topNarrow - dSlopeY)}
+L ${x2},${topNarrow}
+
+L ${round(x2 + dSlopeX)},${round(topNarrow - dSlopeY)}
         L ${round(x2 + dTopInsetL)},${round(topNarrow - dustH)}
         H ${round(x3 - dTopInsetR)}
         L ${round(x3 - dShoulderX)},${round(topNarrow - dShoulderY)}
         L ${round(x3 - dBodyStepX)},${round(topNarrow - dBodyStepY)}
         L ${round(x3 - dBodyStepX)},${topNarrow}
         H ${x4}
-        L ${round(x4 + dBodyStepX)},${topNarrow}
-        L ${round(x4 + dBodyStepX)},${round(topNarrow - dBodyStepY)}
+        L ${x4},${round(topNarrow - dBodyStepY)}
         L ${round(x4 + dShoulderX)},${round(topNarrow - dShoulderY)}
         L ${round(x4 + dTopInsetR)},${round(topNarrow - dustH)}
         H ${round(x5 - dTopInsetL)}
@@ -202,19 +214,17 @@ if (B > maxB) {
         L ${round(x5 - dTopInsetL)},${round(bottomNarrow + dustH)}
         H ${round(x4 + dTopInsetR)}
         L ${round(x4 + dShoulderX)},${round(bottomNarrow + dShoulderY)}
-        L ${round(x4 + dBodyStepX)},${round(bottomNarrow + dBodyStepY)}
-        L ${round(x4 + dBodyStepX)},${bottomNarrow}
+        L ${x4},${round(bottomNarrow + dBodyStepY)}
+        L ${x4},${bottomNarrow}
         H ${x3}
         
         L ${round(x3 - dBodyStepX)},${bottomNarrow}
-        L ${round(x3 - dBodyStepX)},${round(bottomNarrow + dBodyStepY)}
-        L ${round(x3 - dShoulderX)},${round(bottomNarrow + dShoulderY)}
-        L ${round(x3 - dTopInsetR)},${round(bottomNarrow + dustH)}
-        H ${round(x2 + dTopInsetL)}
-        L ${round(x2 + dSlopeX)},${round(bottomNarrow + dSlopeY)}
-        L ${round(x2 + dReliefX)},${round(bottomNarrow + dReliefY)}
-        L ${round(x2 + dTinyX)},${round(bottomNarrow + dTinyY)}
-        L ${x2},${bottomNarrow}
+L ${round(x3 - dBodyStepX)},${round(bottomNarrow + dBodyStepY)}
+L ${round(x3 - dShoulderX)},${round(bottomNarrow + dShoulderY)}
+L ${round(x3 - dTopInsetR)},${round(bottomNarrow + dustH)}
+H ${round(x2 + dTopInsetL)}
+L ${round(x2 + dSlopeX)},${round(bottomNarrow + dSlopeY)}
+L ${x2},${bottomNarrow}
         
         L ${x2},${bottomWide}
         L ${x2},${bottomShoulderY}
@@ -237,26 +247,26 @@ if (B > maxB) {
         `M ${round(x2 - tuckSideRelief)},${bottomShoulderY} H ${round(x2 - tuckRadius + 0.5)} Q ${round(x2 - tuckRadius)},${bottomShoulderY} ${round(x2 - tuckRadius)},${round(bottomScoreY - 0.5)}`,
       ];
 
+      const cet = 0.12; // crease end trim
       creaseLines = [
-        { id: "Crease_GlueLeft", x1: x1, y1: topNarrow, x2: x1, y2: bottomNarrow },
-        { id: "Crease_Panel1Right", x1: x2, y1: topWide,   x2: x2, y2: bottomWide },
-        { id: "Crease_Panel2Right", x1: x3, y1: topNarrow, x2: x3, y2: bottomNarrow },
-        { id: "Crease_Panel3Right", x1: x4, y1: topNarrow, x2: x4, y2: bottomNarrow },
+        { id: "Crease_GlueLeft", x1: x1, y1: topNarrow + cet, x2: x1, y2: bottomNarrow - cet },
+        { id: "Crease_Panel1Right", x1: x2, y1: topNarrow + cet, x2: x2, y2: bottomNarrow - cet },
+        { id: "Crease_Panel2Right", x1: x3, y1: topNarrow + cet, x2: x3, y2: bottomNarrow - cet },
+        { id: "Crease_Panel3Right", x1: x4, y1: topNarrow + cet, x2: x4, y2: bottomNarrow - cet },
         { id: "Crease_TopTuckScore_P1", x1: round(x1 + tuckRadius), y1: topScoreY, x2: round(x2 - tuckRadius), y2: topScoreY },
-        { id: "Crease_TopWide_P1", x1: x1, y1: topWide, x2: x2, y2: topWide },
-        { id: "Crease_TopDust_Mid1", x1: round(x2 + 1.066 * sScale), y1: topNarrow, x2: round(x3 - 0.3 * sScale), y2: topNarrow },
-        { id: "Crease_TopDust_Mid2", x1: round(x4 + 0.3 * sScale), y1: topNarrow, x2: x5, y2: topNarrow },
-        { id: "Crease_BotWide_P1", x1: x1, y1: bottomWide, x2: x2, y2: bottomWide },
+        { id: "Crease_TopWide_P1", x1: x1 + cet, y1: topWide, x2: x2 - cet, y2: topWide },
+        { id: "Crease_TopDust_P3", x1: x2 + cet, y1: topNarrow, x2: round(x3 - dBodyStepX) - cet, y2: topNarrow },
+        { id: "Crease_TopDust_P1", x1: x4 + cet, y1: topNarrow, x2: x5 - cet, y2: topNarrow },
+        { id: "Crease_BotWide_P1", x1: x1 + cet, y1: bottomWide, x2: x2 - cet, y2: bottomWide },
         { id: "Crease_BotTuckScore_P1", x1: round(x1 + tuckRadius), y1: bottomScoreY, x2: round(x2 - tuckRadius), y2: bottomScoreY },
-        { id: "Crease_BotDust_Mid1", x1: round(x2 + 0.3 * sScale), y1: bottomNarrow, x2: round(x3 - 1.066 * sScale), y2: bottomNarrow },
-        { id: "Crease_BotDust_Mid2", x1: round(x4 + 1.065 * sScale), y1: bottomNarrow, x2: x5, y2: bottomNarrow },
+        { id: "Crease_BotDust_P3", x1: x2 + cet, y1: bottomNarrow, x2: round(x3 - dBodyStepX) - cet, y2: bottomNarrow },
+        { id: "Crease_BotDust_P1", x1: x4 + cet, y1: bottomNarrow, x2: x5 - cet, y2: bottomNarrow },
       ];
     } else {
       // ── TYPE B ENGINES (STRUCTURAL BOTTOM FIXES COMPLETED) ──
       trimPath = `
         M ${x0},${topNarrow}
-        L ${round(x0 + dBodyStepX)},${topNarrow}
-        L ${round(x0 + dBodyStepX)},${round(topNarrow - dBodyStepY)}
+        L ${x0},${round(topNarrow - dBodyStepY)}
         L ${round(x0 + dShoulderX)},${round(topNarrow - dShoulderY)}
         L ${round(x0 + dTopInsetR)},${round(topNarrow - dustH)}
         H ${round(x1 - dTopInsetL)}
@@ -271,11 +281,9 @@ if (B > maxB) {
         A ${tuckRadius},${tuckRadius} 0 0 1 ${round(x2 - tuckSideRelief)},${tuckRadius}
         L ${round(x2 - tuckSideRelief)},${tuckShoulderY}
         L ${x2},${tuckShoulderY}
-        L ${x2},${topWide}
+L ${x2},${topNarrow}
 
-        L ${round(x2 + dTinyX)},${round(topNarrow + dTinyY)}
-        L ${round(x2 + dReliefX)},${round(topNarrow - dReliefY)}
-        L ${round(x2 + dSlopeX)},${round(topNarrow - dSlopeY)}
+L ${round(x2 + dSlopeX)},${round(topNarrow - dSlopeY)}
         L ${round(x2 + dTopInsetL)},${round(topNarrow - dustH)}
         H ${round(x3 - dTopInsetR)}
         L ${round(x3 - dShoulderX)},${round(topNarrow - dShoulderY)}
@@ -290,14 +298,12 @@ if (B > maxB) {
         H ${x3}
 
         L ${round(x3 - dBodyStepX)},${bottomNarrow}
-        L ${round(x3 - dBodyStepX)},${round(bottomNarrow + dBodyStepY)}
-        L ${round(x3 - dShoulderX)},${round(bottomNarrow + dShoulderY)}
-        L ${round(x3 - dTopInsetR)},${round(bottomNarrow + dustH)}
-        H ${round(x2 + dTopInsetL)}
-        L ${round(x2 + dSlopeX)},${round(bottomNarrow + dSlopeY)}
-        L ${round(x2 + dReliefX)},${round(bottomNarrow + dReliefY)}
-        L ${round(x2 + dTinyX)},${round(bottomNarrow + dTinyY)}
-        L ${x2},${bottomNarrow}
+L ${round(x3 - dBodyStepX)},${round(bottomNarrow + dBodyStepY)}
+L ${round(x3 - dShoulderX)},${round(bottomNarrow + dShoulderY)}
+L ${round(x3 - dTopInsetR)},${round(bottomNarrow + dustH)}
+H ${round(x2 + dTopInsetL)}
+L ${round(x2 + dSlopeX)},${round(bottomNarrow + dSlopeY)}
+L ${x2},${bottomNarrow}
 
         L ${x2},${bottomWide}
         L ${x2},${bottomShoulderY}
@@ -315,8 +321,7 @@ if (B > maxB) {
         L ${round(x1 - dTopInsetL)},${round(bottomNarrow + dustH)}
         H ${round(x0 + dTopInsetR)}
         L ${round(x0 + dShoulderX)},${round(bottomNarrow + dShoulderY)}
-        L ${round(x0 + dBodyStepX)},${round(bottomNarrow + dBodyStepY)}
-        L ${round(x0 + dBodyStepX)},${bottomNarrow}
+        L ${x0},${round(bottomNarrow + dBodyStepY)}
         L ${x0},${bottomNarrow}
         Z
       `.replace(/\s+/g, " ").trim();
@@ -328,19 +333,20 @@ if (B > maxB) {
         `M ${round(x2 - tuckSideRelief)},${bottomShoulderY} H ${round(x2 - tuckRadius + 0.5)} Q ${round(x2 - tuckRadius)},${bottomShoulderY} ${round(x2 - tuckRadius)},${round(bottomScoreY - 0.5)}`,
       ];
 
+      const cet = 0.12; // crease end trim
       creaseLines = [
-        { id: "Crease_Panel1Right", x1: x1, y1: topNarrow, x2: x1, y2: bottomNarrow },
-        { id: "Crease_Panel2Right", x1: x2, y1: topWide,   x2: x2, y2: bottomWide },
-        { id: "Crease_Panel3Right", x1: x3, y1: topNarrow, x2: x3, y2: bottomNarrow },
-        { id: "Crease_GlueRight",   x1: x4, y1: topNarrow, x2: x4, y2: bottomNarrow },
+        { id: "Crease_Panel1Right", x1: x1, y1: topNarrow + cet, x2: x1, y2: bottomNarrow - cet },
+        { id: "Crease_Panel2Right", x1: x2, y1: topNarrow + cet, x2: x2, y2: bottomNarrow - cet },
+        { id: "Crease_Panel3Right", x1: x3, y1: topNarrow + cet, x2: x3, y2: bottomNarrow - cet },
+        { id: "Crease_GlueRight", x1: x4, y1: topNarrow + cet, x2: x4, y2: bottomNarrow - cet },
         { id: "Crease_TopTuckScore_P2", x1: round(x1 + tuckRadius), y1: topScoreY, x2: round(x2 - tuckRadius), y2: topScoreY },
-        { id: "Crease_TopWide_P2", x1: x1, y1: topWide, x2: x2, y2: topWide },
-        { id: "Crease_TopDust_P1", x1: round(x0 + 0.3 * sScale), y1: topNarrow, x2: x1, y2: topNarrow },
-        { id: "Crease_TopDust_P3", x1: round(x2 + 1.066 * sScale), y1: topNarrow, x2: round(x3 - 0.3 * sScale), y2: topNarrow },
-        { id: "Crease_BotWide_P2", x1: x1, y1: bottomWide, x2: x2, y2: bottomWide },
+        { id: "Crease_TopWide_P2", x1: x1 + cet, y1: topWide, x2: x2 - cet, y2: topWide },
+        { id: "Crease_TopDust_P1", x1: x0 + cet, y1: topNarrow, x2: x1 - cet, y2: topNarrow },
+        { id: "Crease_TopDust_P3", x1: x2 + cet, y1: topNarrow, x2: round(x3 - dBodyStepX) - cet, y2: topNarrow },
+        { id: "Crease_BotWide_P2", x1: x1 + cet, y1: bottomWide, x2: x2 - cet, y2: bottomWide },
         { id: "Crease_BotTuckScore_P2", x1: round(x1 + tuckRadius), y1: bottomScoreY, x2: round(x2 - tuckRadius), y2: bottomScoreY },
-        { id: "Crease_BotDust_P1", x1: round(x0 + 0.3 * sScale), y1: bottomNarrow, x2: x1, y2: bottomNarrow },
-        { id: "Crease_BotDust_P3", x1: round(x2 + 1.065 * sScale), y1: bottomNarrow, x2: round(x3 - 1.066 * sScale), y2: bottomNarrow },
+        { id: "Crease_BotDust_P1", x1: x0 + cet, y1: bottomNarrow, x2: x1 - cet, y2: bottomNarrow },
+        { id: "Crease_BotDust_P3", x1: x2 + cet, y1: bottomNarrow, x2: round(x3 - dBodyStepX) - cet, y2: bottomNarrow },
       ];
     }
 
@@ -394,8 +400,8 @@ ${g.creaseLines.map((l) => `    <line id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2=
   </g>
 </svg>`;
     const blob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
     a.href = url; a.download = `ecma_ste_type${dielineType}_${dim.L}x${dim.W}x${dim.H}mm.svg`;
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
@@ -404,17 +410,17 @@ ${g.creaseLines.map((l) => `    <line id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2=
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
   const inputFields = [
-    ["L","Length"],["W","Width"],["H","Height"],
-    ["t","Board Thickness"],["glue","Glue Flap Width"],
-    ["A","Tuck Flap (A)"],["B","Dust Flap (B)"],
+    ["L", "Length"], ["W", "Width"], ["H", "Height"],
+    ["t", "Board Thickness"], ["glue", "Glue Flap Width"],
+    ["A", "Tuck Flap (A)"], ["B", "Dust Flap (B)"],
   ];
 
   return (
     <div style={{ padding: 24, display: "flex", gap: 24, fontFamily: "system-ui, sans-serif", backgroundColor: "#f0f2f5", minHeight: "100vh" }}>
       <div style={{ width: 300, background: "#fff", borderRadius: 12, padding: 24, height: "fit-content", boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h3 style={{ margin: 0, color: "#1a1a2e", fontSize: 15 }}>📦 Straight Tuck Inside (STI)</h3>
-          
+          <h3 style={{ margin: 0, color: "#1a1a2e", fontSize: 15 }}>📦 Dieline Setup</h3>
+          <span style={{ fontSize: 11, color: "#2e7d32", background: "#e8f5e9", padding: "2px 8px", borderRadius: 99, fontWeight: 700 }}>Combo v2.5</span>
         </div>
 
         <div style={{ marginBottom: 16 }}>
@@ -488,7 +494,7 @@ ${g.creaseLines.map((l) => `    <line id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2=
       <div style={{ flex: 1, background: "#fff", borderRadius: 12, padding: 32, overflow: "auto", boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
         <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#1565c0" }}>Straight Tuck Inside (STI) - Type {dielineType}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#1565c0" }}>ECMA STE Combo (Type {dielineType})</span>
             <div style={{ fontSize: 11, color: "#888", marginTop: 4, lineHeight: 1.6 }}>
               Canvas: <strong>{round(unitCfg.fromMM(g.designW))}</strong> × <strong>{round(unitCfg.fromMM(g.designH))}</strong> {unit}
               &nbsp; | &nbsp; Outer Dimension: <strong>{round(unitCfg.fromMM(g.outerL))}</strong> × <strong>{round(unitCfg.fromMM(g.outerW))}</strong> × <strong>{round(unitCfg.fromMM(g.outerH))}</strong> {unit}

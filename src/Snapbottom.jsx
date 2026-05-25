@@ -104,101 +104,69 @@ function computeSnapLockBottom90({ panelL, panelW, panelW4, lockExtra, pocketExt
   const plungeExtension = Math.max(8, lockExtra || 8);
   const outerExtra = round(clamp(pocketExtra ?? 10, 0, 30));
 
-const idealDepth = round(W / 2 - 0.5);
+  const idealDepth = round(W / 2 - 0.5);
 
-// ==================================================
-// AUTO PERCENTAGE U-CUT RULE
-// Below 70% ratio = normal rule
-// 70% to 100% ratio = automatic gradual percentage blend
-// Square box = approx 1/3 opening
-// ==================================================
+  // ==================================================
+  // AUTO % U-CUT RULE + STRICT MINIMUM 1/3 OPENING
+  // Normal rectangle sizes use normal rule.
+  // Near-square sizes gradually blend toward 1/3 rule.
+  // U-cut opening never goes below L / 3.
+  // ==================================================
+  let normalHFoot = 0;
+  let normalRuleStatus = "";
 
-// 1) First calculate normal rule result
-let normalHFoot = 0;
-let normalRuleStatus = "";
+  if (L - idealDepth * 2 >= minWindow) {
+    normalHFoot = idealDepth;
+    normalRuleStatus = "NORMAL RULE";
+  } else {
+    normalHFoot = round((L - minWindow) / 2);
+    normalRuleStatus = "WINDOW OVERRIDE";
+  }
 
-if (L - idealDepth * 2 >= minWindow) {
-  normalHFoot = idealDepth;
-  normalRuleStatus = "NORMAL RULE";
-} else {
-  normalHFoot = round((L - minWindow) / 2);
-  normalRuleStatus = "WINDOW OVERRIDE";
-}
+  const maxAllowedFoot = round(L / 2 - plungeExtension);
 
-const maxAllowedFoot = round(L / 2 - plungeExtension);
+  if (normalHFoot > maxAllowedFoot) {
+    normalHFoot = maxAllowedFoot;
+    normalRuleStatus = "ANTI-OVERLAP OVERRIDE";
+  }
 
-if (normalHFoot > maxAllowedFoot) {
-  normalHFoot = maxAllowedFoot;
-  normalRuleStatus = "ANTI-OVERLAP OVERRIDE";
-}
+  normalHFoot = round(Math.max(0, normalHFoot));
 
-normalHFoot = round(Math.max(0, normalHFoot));
+  const normalWindowWidth = round(L - normalHFoot * 2);
+  const boxRatio = round(Math.min(L, W) / Math.max(L, W)); // 1.00 = square
+  const ratioStart = 0.70;
+  const ratioEnd = 1.00;
 
-const normalWindowWidth = round(L - normalHFoot * 2);
+  let windowWidth1 = normalWindowWidth;
+  let ruleStatus = normalRuleStatus;
 
-// 2) Calculate box ratio percentage
-const boxRatio = round(Math.min(L, W) / Math.max(L, W)); // 1.00 = square
+  if (boxRatio >= ratioStart) {
+    const blendPercent = clamp((boxRatio - ratioStart) / (ratioEnd - ratioStart), 0, 1);
+    const smoothPercent = round(blendPercent * blendPercent * (3 - 2 * blendPercent), 4);
 
-const ratioStart = 0.70; // below 70%, normal rule only
-const ratioEnd = 1.00;   // 100%, square rule
+    const nearSquareFactor = 0.36;
+    const squareFactor = 0.333;
+    const targetFactor = round(nearSquareFactor + (squareFactor - nearSquareFactor) * smoothPercent, 4);
+    const targetWindowWidth = round(L * targetFactor);
 
-let windowWidth1 = normalWindowWidth;
-let ruleStatus = normalRuleStatus;
+    windowWidth1 = round(normalWindowWidth + (targetWindowWidth - normalWindowWidth) * smoothPercent);
+    ruleStatus = `AUTO % U-CUT RULE (${round(boxRatio * 100, 1)}%)`;
+  }
 
-if (boxRatio >= ratioStart) {
-  // Blend percentage: 0 at 70%, 1 at 100%
-  const blendPercent = clamp((boxRatio - ratioStart) / (ratioEnd - ratioStart), 0, 1);
+  const minUCutOpening = round(Math.max(minWindow, L / 3));
+  const beforeMinWindow = windowWidth1;
 
-  // Smooth easing, so 80x63 and 80x64 do not jump
-  const smoothPercent = round(
-    blendPercent * blendPercent * (3 - 2 * blendPercent),
-    4
-  );
+  windowWidth1 = round(clamp(Math.max(windowWidth1, minUCutOpening), minUCutOpening, L - 1));
 
-  // Target U-cut opening factor:
-  // near-square = 0.36 of L
-  // perfect square = 0.333 of L
-  const nearSquareFactor = 0.36;
-  const squareFactor = 0.333;
+  if (windowWidth1 > beforeMinWindow) {
+    ruleStatus = `${ruleStatus} + MIN 1/3 U-CUT`;
+  }
 
-  const targetFactor = round(
-    nearSquareFactor + (squareFactor - nearSquareFactor) * smoothPercent,
-    4
-  );
+  const H_foot = round((L - windowWidth1) / 2);
 
-  const targetWindowWidth = round(L * targetFactor);
-
-  // Final U-cut opening = normal opening + percentage movement toward target
-  windowWidth1 = round(
-    normalWindowWidth + (targetWindowWidth - normalWindowWidth) * smoothPercent
-  );
-
-  ruleStatus = `AUTO % U-CUT RULE (${round(boxRatio * 100, 1)}%)`;
-}
-
-// Safety
-// Safety + strict minimum U-cut opening
-// Red marked U-cut opening should never go below 1/3 of L.
-const minUCutOpening = round(Math.max(minWindow, L / 3));
-
-const beforeMinWindow = windowWidth1;
-
-windowWidth1 = round(
-  clamp(
-    Math.max(windowWidth1, minUCutOpening),
-    minUCutOpening,
-    L - 1
-  )
-);
-
-if (windowWidth1 > beforeMinWindow) {
-  ruleStatus = `${ruleStatus} + MIN 1/3 U-CUT`;
-}
-
-let H_foot = round((L - windowWidth1) / 2);
-
-const orangeLineY = round(W / 2);
-const maxFlapDepth = round(orangeLineY + outerExtra);const hookPlungeY = round(-H_foot - plungeExtension);
+  const orangeLineY = round(W / 2);
+  const maxFlapDepth = round(orangeLineY + outerExtra);
+  const hookPlungeY = round(-H_foot - plungeExtension);
   const hookStepWidth = round(orangeLineY + 5);
 
   const bridgeWidth3 = round(Math.max(1, windowWidth1 - 1));
@@ -373,7 +341,7 @@ const SnapLockBottomGenerator = () => {
     const safeL = round(Math.max(inputL, minL));
     const safeW = round(Math.max(inputW, minW));
     const safeH = round(Math.max(inputH, 30));
-    const safeT = round(clamp(inputT, 0.2, 2));
+    const safeT = round(clamp(inputT, 0, 2));
     const safeGlue = round(clamp(glue, 10, 25));
 
     if (inputL > 0 && inputL < minL) warnings.push(`Length L adjusted to minimum ${minL} mm.`);
@@ -391,7 +359,8 @@ const SnapLockBottomGenerator = () => {
     actualA = round(clamp(actualA, 6, maxA));
 
     const minB = 4;
-    const maxB = round((safeW + actualA) / 2);
+    // RTI_Box_V2 final rule: default B = (W + A) / 2, maximum B = L / 2
+    const maxB = round(safeL / 2);
     if (actualB > maxB) {
       actualB = maxB;
       warnings.push(`Top dust B adjusted to maximum ${round(unitCfg.fromMM(actualB))}${unit}.`);
@@ -399,7 +368,7 @@ const SnapLockBottomGenerator = () => {
     actualB = round(clamp(actualB, minB, maxB));
 
     const suggestedA = round(clamp(safeW * 0.65, 16, 30));
-    const suggestedB = round(clamp((safeW + suggestedA) / 2, 14, 32));
+    const suggestedB = round(clamp((safeW + suggestedA) / 2, 14, safeL / 2));
 
     const actualSnapPocketExtra = round(clamp(snapPocketExtra ?? 10, 0, 30));
     const actualBottomExtra = round(Math.max(8, bottomExtra || 8));
@@ -426,21 +395,26 @@ const SnapLockBottomGenerator = () => {
     let x4;
     let x5;
 
-    if (isTypeA) {
-      // Type A: Glue | L | W | L | W-t
-      x1 = round(safeGlue);
-      x2 = round(x1 + cL);
-      x3 = round(x2 + cW);
-      x4 = round(x3 + cL);
-      x5 = round(x4 + (cW - safeT));
-    } else {
-      // Type B: W-t | L | W | L | Glue
-      x1 = round(cW - safeT);
-      x2 = round(x1 + cL);
-      x3 = round(x2 + cW);
-      x4 = round(x3 + cL);
-      x5 = round(x4 + safeGlue);
-    }
+    // Universal Panel 4 width compensation rule
+// t <= 1 mm  => Panel 4 = W - 0.5 mm
+// t > 1 mm   => Panel 4 = W - t
+const panel4WidthComp = safeT <= 1 ? 0.5 : safeT;
+
+if (isTypeA) {
+  // Type A: Glue | L | W | L | W-comp
+  x1 = round(safeGlue);
+  x2 = round(x1 + cL);
+  x3 = round(x2 + cW);
+  x4 = round(x3 + cL);
+  x5 = round(x4 + (cW - panel4WidthComp));
+} else {
+  // Type B: W-comp | L | W | L | Glue
+  x1 = round(cW - panel4WidthComp);
+  x2 = round(x1 + cL);
+  x3 = round(x2 + cW);
+  x4 = round(x3 + cL);
+  x5 = round(x4 + safeGlue);
+}
 
     // --- TOP GEOMETRY FROM STABLE RTI/STI LOGIC ---
     const glueAngleDeg = 15;
@@ -456,16 +430,18 @@ const SnapLockBottomGenerator = () => {
     const dustH = actualB;
     const sScale = Math.min(1, safeW / 12, actualB / 9);
 
+    // RTI_Box_V2 final top dust-flap micro-geometry
+    // dTiny/dRelief values are kept only for compatibility; top dust starts use dBodyStep, not tiny sharp points.
     const dTinyX = round(0.61 * sScale);
     const dTinyY = round(0.149 * sScale);
     const dReliefX = round(1.186 * sScale);
     const dReliefY = round(0.132 * sScale);
-    const dSlopeX = round(3.5 * sScale);
-    const dSlopeY = round(3.5 * sScale);
+    const dSlopeX = round(3.0 * sScale);
+    const dSlopeY = round(3.0 * sScale);
     const dShoulderX = round(2.3 * sScale);
-    const dShoulderY = round(8.0 * sScale);
-    const dBodyStepX = round(0.3 * sScale);
-    const dBodyStepY = round(6.0 * sScale);
+    const dShoulderY = round(6.0 * sScale);
+    const dBodyStepX = round(0.35 * sScale);
+    const dBodyStepY = round(4.0 * sScale);
 
     let dTopInsetL = dSlopeX + Math.max(0, actualB - dSlopeY) * (1.0 / 19.5);
     let dTopInsetR = dShoulderX + Math.max(0, actualB - dShoulderY) * (4.259 / 15.0);
@@ -488,20 +464,29 @@ const SnapLockBottomGenerator = () => {
     dTopInsetR = round(dTopInsetR);
 
     const topWide = round(cW + tuckShoulderY);
-    const topNarrow = round(topWide + safeT);
-    const yBottom = round(topNarrow + safeH);
-    const topScoreY = tuckFront;
+const topNarrow = round(topWide + safeT);
+
+// Board thickness top compensation for snap-bottom panels.
+// Bottom stays same for all panels.
+// Full-height panel starts from topWide.
+// Reduced-height panel starts from topWide + board thickness.
+const topBodyShift = safeT > 0.3 ? safeT : 0;
+const topDustFoldY = round(topWide + topBodyShift);
+
+// Body height must measure from full-height top line.
+const yBottom = round(topWide + safeH);
+const topScoreY = tuckFront;
 
     // --- SNAP LOCK BOTTOM ---
     const snap = computeSnapLockBottom90({
       panelL: cL,
       panelW: cW,
-      panelW4: cW - safeT,
+     panelW4: cW - panel4WidthComp,
       lockExtra: actualBottomExtra,
       pocketExtra: actualSnapPocketExtra,
     });
 
-    const bodyWidth = round(cL + cW + cL + (cW - safeT));
+  const bodyWidth = round(cL + cW + cL + (cW - panel4WidthComp));
     const bodyStartX = isTypeA ? x1 : x0;
 
     const toWorld = ([localX, localY]) => [
@@ -535,9 +520,10 @@ const jointCtrl = {
   Q: { x: p.Q.x, y: round(p.Q.y - jointLift) },
 };
 
-
+// Type B is mirrored, so left/right micro relief must mirror too.
 const reliefDir = isTypeA ? 1 : -1;
 
+// local helper points
 const jointHelper = {
   A1: { x: round(p.A.x + jointRelief * reliefDir), y: p.A.y },
 
@@ -552,7 +538,6 @@ const jointHelper = {
 };
 
 // shifted straight-line bottom points
-
 const pCut = useEcmaLocalRelief
   ? {
       ...p,
@@ -571,6 +556,7 @@ const pCut = useEcmaLocalRelief
       R: { x: round(p.R.x + jointRelief * reliefDir), y: p.R.y },
     }
   : p;
+
     const safeCorner = (corner, prev, next, desiredR = baseCornerR, factor = 0.45) => {
       const d1 = Math.hypot(prev.x - corner.x, prev.y - corner.y);
       const d2 = Math.hypot(next.x - corner.x, next.y - corner.y);
@@ -670,6 +656,7 @@ const pCut = useEcmaLocalRelief
 // Small gap so crease line does not overlap cut line
 const creaseCutGap = round(clamp(cW * 0.01, 0.25, 0.5));
 const vBottomStop = round(yBottom - creaseCutGap);
+const topCreaseGap = round(clamp(cW * 0.01, 0.25, 0.5));
 
     let trimPath;
     let trimReliefPaths;
@@ -687,22 +674,20 @@ const vBottomStop = round(yBottom - creaseCutGap);
         A ${tuckRadius},${tuckRadius} 0 0 1 ${round(x2 - tuckSideRelief)},${tuckRadius}
         L ${round(x2 - tuckSideRelief)},${tuckShoulderY}
         L ${x2},${tuckShoulderY}
-        L ${x2},${topWide}
-        L ${round(x2 + dTinyX)},${round(topNarrow + dTinyY)}
-        L ${round(x2 + dReliefX)},${round(topNarrow - dReliefY)}
-        L ${round(x2 + dSlopeX)},${round(topNarrow - dSlopeY)}
-        L ${round(x2 + dTopInsetL)},${round(topNarrow - dustH)}
+      L ${x2},${topDustFoldY}
+L ${round(x2 + dSlopeX)},${round(topDustFoldY - dSlopeY)}
+L ${round(x2 + dTopInsetL)},${round(topDustFoldY - dustH)}
         H ${round(x3 - dTopInsetR)}
-        L ${round(x3 - dShoulderX)},${round(topNarrow - dShoulderY)}
-        L ${round(x3 - dBodyStepX)},${round(topNarrow - dBodyStepY)}
-        L ${round(x3 - dBodyStepX)},${topNarrow}
+        L ${round(x3 - dShoulderX)},${round(topDustFoldY - dShoulderY)}
+        L ${round(x3 - dBodyStepX)},${round(topDustFoldY - dBodyStepY)}
+        L ${round(x3 - dBodyStepX)},${topDustFoldY}
         H ${round(x4 + dBodyStepX)}
-        L ${round(x4 + dBodyStepX)},${round(topNarrow - dBodyStepY)}
-        L ${round(x4 + dShoulderX)},${round(topNarrow - dShoulderY)}
-        L ${round(x4 + dTopInsetR)},${round(topNarrow - dustH)}
+        L ${round(x4 + dBodyStepX)},${round(topDustFoldY - dBodyStepY)}
+        L ${round(x4 + dShoulderX)},${round(topDustFoldY - dShoulderY)}
+        L ${round(x4 + dTopInsetR)},${round(topDustFoldY - dustH)}
         H ${round(x5 - dTopInsetL)}
-        L ${round(x5 - dSlopeX)},${round(topNarrow - dSlopeY)}
-        L ${x5},${topNarrow}
+        L ${round(x5 - dSlopeX)},${round(topDustFoldY - dSlopeY)}
+        L ${x5},${topDustFoldY}
         L ${x5},${yBottom}
         ${snapBottomSegment}
         L ${x0},${round(yBottom - glueBevelY)}
@@ -715,29 +700,28 @@ const vBottomStop = round(yBottom - creaseCutGap);
       ];
 
       creaseLines = [
-        { id: "v_glue", x1, y1: topNarrow, x2: x1, y2: vBottomStop },
-        { id: "v_p1_p2", x1: x2, y1: topWide, x2: x2, y2: vBottomStop },
-        { id: "v_p2_p3", x1: x3, y1: topNarrow, x2: x3, y2: vBottomStop },
-        { id: "v_p3_p4", x1: x4, y1: topNarrow, x2: x4, y2: vBottomStop },
+        { id: "v_glue", x1, y1: topWide, x2: x1, y2: vBottomStop },
+{ id: "v_p1_p2", x1: x2, y1: topWide, x2: x2, y2: vBottomStop },
+{ id: "v_p2_p3", x1: x3, y1: topDustFoldY, x2: x3, y2: vBottomStop },
+{ id: "v_p3_p4", x1: x4, y1: topDustFoldY, x2: x4, y2: vBottomStop },
         { id: "top_tuck_panel", x1, y1: topWide, x2, y2: topWide },
-        { id: "top_dust_left", x1: round(x2 + 1.066 * sScale), y1: topNarrow, x2: round(x3 - 0.3 * sScale), y2: topNarrow },
-        { id: "top_dust_right", x1: round(x4 + 0.3 * sScale), y1: topNarrow, x2: x5, y2: topNarrow },
+        { id: "top_dust_left", x1: x2, y1: topDustFoldY, x2: x3, y2: topDustFoldY },
+{ id: "top_dust_right", x1: x4, y1: topDustFoldY, x2: x5, y2: topDustFoldY },
         { id: "top_tuck_score", x1: round(x1 + tuckRadius), y1: topScoreY, x2: round(x2 - tuckRadius), y2: topScoreY },
         { id: "h_bottom_panel1", x1: round(x1 + creaseCutGap), y1: yBottom, x2: round(x2 - creaseBreak), y2: yBottom },
-{ id: "h_bottom_panel2", x1: round(x2 + creaseBreak), y1: yBottom, x2: round(x3 - creaseBreak), y2: yBottom },
-{ id: "h_bottom_panel3", x1: round(x3 + creaseBreak), y1: yBottom, x2: round(x4 - creaseBreak), y2: yBottom },
-{ id: "h_bottom_panel4", x1: round(x4 + creaseBreak), y1: yBottom, x2: round(x5 - creaseCutGap), y2: yBottom },
+        { id: "h_bottom_panel2", x1: round(x2 + creaseBreak), y1: yBottom, x2: round(x3 - creaseBreak), y2: yBottom },
+        { id: "h_bottom_panel3", x1: round(x3 + creaseBreak), y1: yBottom, x2: round(x4 - creaseBreak), y2: yBottom },
+        { id: "h_bottom_panel4", x1: round(x4 + creaseBreak), y1: yBottom, x2: round(x5 - creaseCutGap), y2: yBottom },
       ];
     } else {
       trimPath = cleanPath(`
-        M ${x0},${topNarrow}
-        H ${round(x0 + dBodyStepX)}
-        L ${round(x0 + dBodyStepX)},${round(topNarrow - dBodyStepY)}
-        L ${round(x0 + dShoulderX)},${round(topNarrow - dShoulderY)}
-        L ${round(x0 + dTopInsetR)},${round(topNarrow - dustH)}
-        H ${round(x1 - dTopInsetL)}
-        L ${round(x1 - dSlopeX)},${round(topNarrow - dSlopeY)}
-        L ${x1},${topNarrow}
+        M ${x0},${topDustFoldY}
+L ${x0},${round(topDustFoldY - dBodyStepY)}
+L ${round(x0 + dShoulderX)},${round(topDustFoldY - dShoulderY)}
+L ${round(x0 + dTopInsetR)},${round(topDustFoldY - dustH)}
+H ${round(x1 - dTopInsetL)}
+L ${round(x1 - dSlopeX)},${round(topDustFoldY - dSlopeY)}
+L ${x1},${topDustFoldY}
         L ${x1},${tuckShoulderY}
         L ${round(x1 + tuckSideRelief)},${tuckShoulderY}
         L ${round(x1 + tuckSideRelief)},${tuckRadius}
@@ -746,15 +730,13 @@ const vBottomStop = round(yBottom - creaseCutGap);
         A ${tuckRadius},${tuckRadius} 0 0 1 ${round(x2 - tuckSideRelief)},${tuckRadius}
         L ${round(x2 - tuckSideRelief)},${tuckShoulderY}
         L ${x2},${tuckShoulderY}
-        L ${x2},${topWide}
-        L ${round(x2 + dTinyX)},${round(topNarrow + dTinyY)}
-        L ${round(x2 + dReliefX)},${round(topNarrow - dReliefY)}
-        L ${round(x2 + dSlopeX)},${round(topNarrow - dSlopeY)}
-        L ${round(x2 + dTopInsetL)},${round(topNarrow - dustH)}
+        L ${x2},${topDustFoldY}
+L ${round(x2 + dSlopeX)},${round(topDustFoldY - dSlopeY)}
+L ${round(x2 + dTopInsetL)},${round(topDustFoldY - dustH)}
         H ${round(x3 - dTopInsetR)}
-        L ${round(x3 - dShoulderX)},${round(topNarrow - dShoulderY)}
-        L ${round(x3 - dBodyStepX)},${round(topNarrow - dBodyStepY)}
-        L ${round(x3 - dBodyStepX)},${topNarrow}
+        L ${round(x3 - dShoulderX)},${round(topDustFoldY - dShoulderY)}
+        L ${round(x3 - dBodyStepX)},${round(topDustFoldY - dBodyStepY)}
+        L ${round(x3 - dBodyStepX)},${topDustFoldY}
         H ${x4}
         L ${x5},${round(topNarrow + glueBevelY)}
         L ${x5},${round(yBottom - glueBevelY)}
@@ -769,13 +751,13 @@ const vBottomStop = round(yBottom - creaseCutGap);
       ];
 
       creaseLines = [
-        { id: "v_p4_p1", x1, y1: topNarrow, x2: x1, y2: vBottomStop  },
-        { id: "v_p1_p2", x1: x2, y1: topWide, x2: x2, y2: vBottomStop  },
-        { id: "v_p2_p3", x1: x3, y1: topNarrow, x2: x3, y2: vBottomStop  },
-        { id: "v_p3_glue", x1: x4, y1: topNarrow, x2: x4, y2: vBottomStop  },
-        { id: "top_dust_panel4", x1: round(x0 + 0.3 * sScale), y1: topNarrow, x2: x1, y2: topNarrow },
-        { id: "top_tuck_panel1", x1, y1: topWide, x2, y2: topWide },
-        { id: "top_dust_panel2", x1: round(x2 + 1.066 * sScale), y1: topNarrow, x2: round(x3 - 0.3 * sScale), y2: topNarrow },
+        { id: "v_p4_p1", x1, y1: round(topDustFoldY + topCreaseGap), x2: x1, y2: vBottomStop },
+{ id: "v_p1_p2", x1: x2, y1: topDustFoldY, x2: x2, y2: vBottomStop },
+{ id: "v_p2_p3", x1: x3, y1: topDustFoldY, x2: x3, y2: vBottomStop },
+{ id: "v_p3_glue", x1: x4, y1: topDustFoldY, x2: x4, y2: vBottomStop },
+        { id: "top_dust_panel4", x1: x0, y1: topDustFoldY, x2: round(x1 - topCreaseGap), y2: topDustFoldY },
+{ id: "top_tuck_panel1", x1: round(x1 + topCreaseGap), y1: topWide, x2, y2: topWide },
+        { id: "top_dust_panel2", x1: x2, y1: topDustFoldY, x2: x3, y2: topDustFoldY },
         { id: "top_tuck_score", x1: round(x1 + tuckRadius), y1: topScoreY, x2: round(x2 - tuckRadius), y2: topScoreY },
         { id: "h_bottom_typeB_panel4", x1: round(x0 + creaseCutGap), y1: yBottom, x2: round(x1 - creaseBreak), y2: yBottom },
 { id: "h_bottom_typeB_panel1", x1: round(x1 + creaseBreak), y1: yBottom, x2: round(x2 - creaseBreak), y2: yBottom },
@@ -839,10 +821,6 @@ const vBottomStop = round(yBottom - creaseCutGap);
       setCutLengthMM(total);
     }
   }, [g.trimPath, g.trimReliefPaths]);
-
-  const applySuggestedAB = () => {
-    dispatch({ type: "UPDATE_MULTIPLE", payload: { A: g.suggestedA, B: g.suggestedB } });
-  };
 
   const downloadSVG = useCallback(() => {
     const svgMarkup = `<?xml version="1.0" encoding="UTF-8"?>
@@ -975,10 +953,6 @@ ${g.creaseLines.map((l) => `    <line id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2=
 
         <div style={{ height: 1, background: "#f0f2f5", margin: "14px 0" }} />
 
-        <button onClick={applySuggestedAB} style={{ width: "100%", padding: 10, border: "1px solid #1565c0", borderRadius: 6, background: "#f0f7ff", color: "#1565c0", fontWeight: 700, cursor: "pointer", marginBottom: 12, fontSize: 13 }}>
-          ✨ Apply Suggested A / B
-        </button>
-
         <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
           <button onClick={() => dispatch({ type: "UNDO" })} disabled={!canUndo} style={{ flex: 1, padding: 8, border: "1px solid #ddd", borderRadius: 6, cursor: canUndo ? "pointer" : "not-allowed", background: canUndo ? "#fff" : "#f9f9f9", color: canUndo ? "#333" : "#bbb", fontSize: 13 }}>
             ↩ Undo
@@ -1005,16 +979,6 @@ ${g.creaseLines.map((l) => `    <line id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2=
             <span>Inner Dimension</span>
             <strong>{round(unitCfg.fromMM(g.innerL))} × {round(unitCfg.fromMM(g.innerW))} × {round(unitCfg.fromMM(g.innerH))} {unit}</strong>
           </div>
-        </div>
-
-        <div style={{ marginTop: 14, padding: 12, backgroundColor: "#f7fbff", border: "1px solid #d8ecff", borderRadius: 8, fontSize: 11, lineHeight: 1.6, color: "#35506b" }}>
-          <strong>Snap Geometry:</strong>
-          <div>Rule: {g.snapDerived.ruleStatus}</div>
-          <div>H Foot: {round(unitCfg.fromMM(g.snapDerived.H_foot))} {unit}</div>
-          <div>Half W Guide: {round(unitCfg.fromMM(g.snapDerived.orangeLineY))} {unit}</div>
-          <div>Snap Pocket Extra: {round(unitCfg.fromMM(g.actualSnapPocketExtra))} {unit}</div>
-          <div>Max Depth: {round(unitCfg.fromMM(g.snapDerived.maxFlapDepth))} {unit}</div>
-          <div>Hook Step: {round(unitCfg.fromMM(g.snapDerived.hookStepWidth))} {unit}</div>
         </div>
 
         {g.warnings.length > 0 && (

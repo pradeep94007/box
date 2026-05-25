@@ -171,12 +171,12 @@ const AutoBottomCrashLockGenerator = () => {
     const dTinyY = round(0.149 * sScale);
     const dReliefX = round(1.186 * sScale);
     const dReliefY = round(0.132 * sScale);
-    const dSlopeX = round(3.5 * sScale);
-    const dSlopeY = round(3.5 * sScale);
+    const dSlopeX = round(3.0 * sScale);
+    const dSlopeY = round(3.0 * sScale);
     const dShoulderX = round(2.3 * sScale);
-    const dShoulderY = round(8.0 * sScale);
+    const dShoulderY = round(6.0 * sScale);
     const dBodyStepX = round(0.3 * sScale);
-    const dBodyStepY = round(6.0 * sScale);
+    const dBodyStepY = round(4.0 * sScale);
 
     let dTopInsetL = dSlopeX + Math.max(0, actualB - dSlopeY) * (1.0 / 19.5);
     let dTopInsetR = dShoulderX + Math.max(0, actualB - dShoulderY) * (4.259 / 15.0);
@@ -197,7 +197,17 @@ const AutoBottomCrashLockGenerator = () => {
 
     const topWide = round(cW + tuckShoulderY);
     const topNarrow = round(topWide + safeT);
-    const yBottom = round(topNarrow + cH);
+    
+    // Board thickness top compensation for top dust panels
+    const topBodyShift = safeT > 0.3 ? safeT : 0;
+    const topDustFoldY = round(topWide + topBodyShift);
+    const topCreaseGap = round(clamp(cW * 0.01, 0.25, 0.5));
+
+    // Body height fix:
+    // yBottom must be based on the main closing-flap fold line (topWide),
+    // not topNarrow. Otherwise board thickness adds extra height to the
+    // full-height panels when t > 0.
+    const yBottom = round(topWide + cH);
     const topScoreY = tuckFront;
 
     // ==================================================
@@ -551,22 +561,20 @@ const AutoBottomCrashLockGenerator = () => {
         A ${tuckRadius},${tuckRadius} 0 0 1 ${round(x2 - tuckSideRelief)},${tuckRadius}
         L ${round(x2 - tuckSideRelief)},${tuckShoulderY}
         L ${x2},${tuckShoulderY}
-        L ${x2},${topWide}
-        L ${round(x2 + dTinyX)},${round(topNarrow + dTinyY)}
-        L ${round(x2 + dReliefX)},${round(topNarrow - dReliefY)}
-        L ${round(x2 + dSlopeX)},${round(topNarrow - dSlopeY)}
-        L ${round(x2 + dTopInsetL)},${round(topNarrow - dustH)}
+        L ${x2},${topDustFoldY}
+        L ${round(x2 + dSlopeX)},${round(topDustFoldY - dSlopeY)}
+        L ${round(x2 + dTopInsetL)},${round(topDustFoldY - dustH)}
         H ${round(x3 - dTopInsetR)}
-        L ${round(x3 - dShoulderX)},${round(topNarrow - dShoulderY)}
-        L ${round(x3 - dBodyStepX)},${round(topNarrow - dBodyStepY)}
-        L ${round(x3 - dBodyStepX)},${topNarrow}
+        L ${round(x3 - dShoulderX)},${round(topDustFoldY - dShoulderY)}
+        L ${round(x3 - dBodyStepX)},${round(topDustFoldY - dBodyStepY)}
+        L ${round(x3 - dBodyStepX)},${topDustFoldY}
         H ${round(x4 + dBodyStepX)}
-        L ${round(x4 + dBodyStepX)},${round(topNarrow - dBodyStepY)}
-        L ${round(x4 + dShoulderX)},${round(topNarrow - dShoulderY)}
-        L ${round(x4 + dTopInsetR)},${round(topNarrow - dustH)}
+        L ${round(x4 + dBodyStepX)},${round(topDustFoldY - dBodyStepY)}
+        L ${round(x4 + dShoulderX)},${round(topDustFoldY - dShoulderY)}
+        L ${round(x4 + dTopInsetR)},${round(topDustFoldY - dustH)}
         H ${round(x5 - dTopInsetL)}
-        L ${round(x5 - dSlopeX)},${round(topNarrow - dSlopeY)}
-        L ${x5},${topNarrow}
+        L ${round(x5 - dSlopeX)},${round(topDustFoldY - dSlopeY)}
+        L ${x5},${topDustFoldY}
         L ${x5},${yBottom}
         ${pair2.path}
         ${pair1.path}
@@ -580,13 +588,13 @@ const AutoBottomCrashLockGenerator = () => {
       ];
 
       creaseLines = [
-        { id: "v_glue", x1, y1: topNarrow, x2: x1, y2: yBottom },
+        { id: "v_glue", x1, y1: topWide, x2: x1, y2: yBottom },
         { id: "v_p1_p2", x1: x2, y1: topWide, x2: x2, y2: yBottom },
-        { id: "v_p2_p3", x1: x3, y1: topNarrow, x2: x3, y2: yBottom },
-        { id: "v_p3_p4", x1: x4, y1: topNarrow, x2: x4, y2: yBottom },
+        { id: "v_p2_p3", x1: x3, y1: topDustFoldY, x2: x3, y2: yBottom },
+        { id: "v_p3_p4", x1: x4, y1: topDustFoldY, x2: x4, y2: yBottom },
         { id: "top_tuck_panel", x1, y1: topWide, x2, y2: topWide },
-        { id: "top_dust_left", x1: round(x2 + 1.066 * sScale), y1: topNarrow, x2: round(x3 - 0.3 * sScale), y2: topNarrow },
-        { id: "top_dust_right", x1: round(x4 + 0.3 * sScale), y1: topNarrow, x2: x5, y2: topNarrow },
+        { id: "top_dust_left", x1: x2, y1: topDustFoldY, x2: x3, y2: topDustFoldY },
+        { id: "top_dust_right", x1: x4, y1: topDustFoldY, x2: x5, y2: topDustFoldY },
         { id: "top_tuck_score", x1: round(x1 + tuckRadius), y1: topScoreY, x2: round(x2 - tuckRadius), y2: topScoreY },
 
         { id: "h_bottom_panel1", x1: x1, y1: yBottom, x2: round(x2 - creaseBreak), y2: yBottom },
@@ -599,14 +607,13 @@ const AutoBottomCrashLockGenerator = () => {
       ];
     } else {
       trimPath = cleanPath(`
-        M ${x0},${topNarrow}
-        H ${round(x0 + dBodyStepX)}
-        L ${round(x0 + dBodyStepX)},${round(topNarrow - dBodyStepY)}
-        L ${round(x0 + dShoulderX)},${round(topNarrow - dShoulderY)}
-        L ${round(x0 + dTopInsetR)},${round(topNarrow - dustH)}
+        M ${x0},${topDustFoldY}
+        L ${x0},${round(topDustFoldY - dBodyStepY)}
+        L ${round(x0 + dShoulderX)},${round(topDustFoldY - dShoulderY)}
+        L ${round(x0 + dTopInsetR)},${round(topDustFoldY - dustH)}
         H ${round(x1 - dTopInsetL)}
-        L ${round(x1 - dSlopeX)},${round(topNarrow - dSlopeY)}
-        L ${x1},${topNarrow}
+        L ${round(x1 - dSlopeX)},${round(topDustFoldY - dSlopeY)}
+        L ${x1},${topDustFoldY}
         L ${x1},${tuckShoulderY}
         L ${round(x1 + tuckSideRelief)},${tuckShoulderY}
         L ${round(x1 + tuckSideRelief)},${tuckRadius}
@@ -615,15 +622,13 @@ const AutoBottomCrashLockGenerator = () => {
         A ${tuckRadius},${tuckRadius} 0 0 1 ${round(x2 - tuckSideRelief)},${tuckRadius}
         L ${round(x2 - tuckSideRelief)},${tuckShoulderY}
         L ${x2},${tuckShoulderY}
-        L ${x2},${topWide}
-        L ${round(x2 + dTinyX)},${round(topNarrow + dTinyY)}
-        L ${round(x2 + dReliefX)},${round(topNarrow - dReliefY)}
-        L ${round(x2 + dSlopeX)},${round(topNarrow - dSlopeY)}
-        L ${round(x2 + dTopInsetL)},${round(topNarrow - dustH)}
+        L ${x2},${topDustFoldY}
+        L ${round(x2 + dSlopeX)},${round(topDustFoldY - dSlopeY)}
+        L ${round(x2 + dTopInsetL)},${round(topDustFoldY - dustH)}
         H ${round(x3 - dTopInsetR)}
-        L ${round(x3 - dShoulderX)},${round(topNarrow - dShoulderY)}
-        L ${round(x3 - dBodyStepX)},${round(topNarrow - dBodyStepY)}
-        L ${round(x3 - dBodyStepX)},${topNarrow}
+        L ${round(x3 - dShoulderX)},${round(topDustFoldY - dShoulderY)}
+        L ${round(x3 - dBodyStepX)},${round(topDustFoldY - dBodyStepY)}
+        L ${round(x3 - dBodyStepX)},${topDustFoldY}
         H ${x4}
         L ${x5},${round(topNarrow + glueBevelY)}
         L ${x5},${round(yBottom - safeGlue)}
@@ -639,13 +644,13 @@ const AutoBottomCrashLockGenerator = () => {
       ];
 
       creaseLines = [
-        { id: "v_p4_p1", x1, y1: topNarrow, x2: x1, y2: yBottom },
-        { id: "v_p1_p2", x1: x2, y1: topWide, x2: x2, y2: yBottom },
-        { id: "v_p2_p3", x1: x3, y1: topNarrow, x2: x3, y2: yBottom },
-        { id: "v_p3_glue", x1: x4, y1: topNarrow, x2: x4, y2: yBottom },
-        { id: "top_dust_panel4", x1: round(x0 + 0.3 * sScale), y1: topNarrow, x2: x1, y2: topNarrow },
-        { id: "top_tuck_panel1", x1, y1: topWide, x2, y2: topWide },
-        { id: "top_dust_panel2", x1: round(x2 + 1.066 * sScale), y1: topNarrow, x2: round(x3 - 0.3 * sScale), y2: topNarrow },
+        { id: "v_p4_p1", x1, y1: round(topDustFoldY + topCreaseGap), x2: x1, y2: yBottom },
+        { id: "v_p1_p2", x1: x2, y1: topDustFoldY, x2: x2, y2: yBottom },
+        { id: "v_p2_p3", x1: x3, y1: topDustFoldY, x2: x3, y2: yBottom },
+        { id: "v_p3_glue", x1: x4, y1: topDustFoldY, x2: x4, y2: yBottom },
+        { id: "top_dust_panel4", x1: x0, y1: topDustFoldY, x2: round(x1 - topCreaseGap), y2: topDustFoldY },
+        { id: "top_tuck_panel1", x1: round(x1 + topCreaseGap), y1: topWide, x2, y2: topWide },
+        { id: "top_dust_panel2", x1: x2, y1: topDustFoldY, x2: x3, y2: topDustFoldY },
         { id: "top_tuck_score", x1: round(x1 + tuckRadius), y1: topScoreY, x2: round(x2 - tuckRadius), y2: topScoreY },
 
         { id: "h_bottom_typeB_panel4", x1: x0, y1: yBottom, x2: round(x1 - creaseBreak), y2: yBottom },
@@ -717,13 +722,7 @@ const AutoBottomCrashLockGenerator = () => {
     setCreaseLengthMM(round(totalCrease));
   }, [g.trimPath, g.trimReliefPaths, g.creaseLines]);
 
-  const applySuggestedAB = () => {
-    setDim((prev) => ({
-      ...prev,
-      A: g.suggestedA,
-      B: g.suggestedB,
-    }));
-  };
+  
 
   const buildSvgMarkup = () => {
     const reliefMarkup = g.trimReliefPaths
@@ -985,23 +984,7 @@ ${creaseMarkup}
 
         <div style={{ height: 1, background: "#f0f2f5", margin: "14px 0" }} />
 
-        <button
-          onClick={applySuggestedAB}
-          style={{
-            width: "100%",
-            padding: 10,
-            border: "1px solid #1565c0",
-            borderRadius: 6,
-            background: "#f0f7ff",
-            color: "#1565c0",
-            fontWeight: 700,
-            cursor: "pointer",
-            marginBottom: 12,
-            fontSize: 13,
-          }}
-        >
-          ✨ Apply Suggested A / B
-        </button>
+        
 
         <button
           onClick={downloadSVG}
@@ -1051,24 +1034,7 @@ ${creaseMarkup}
           </div>
         </div>
 
-        <div
-          style={{
-            marginTop: 14,
-            padding: 12,
-            backgroundColor: "#f7fbff",
-            border: "1px solid #d8ecff",
-            borderRadius: 8,
-            fontSize: 11,
-            lineHeight: 1.6,
-            color: "#35506b",
-          }}
-        >
-          <strong>Crash Lock Geometry:</strong>
-          <div>Panel Order: {g.isTypeA ? "Glue | L | W | L | W-t" : "W-t | L | W | L | Glue"}</div>
-          <div>Bottom Depth: {round(g.bottomDepth / unitFactor)} {unitLabel}</div>
-          <div>Second Bottom Extra: {round(g.actualBottomExtra / unitFactor)} {unitLabel}</div>
-          <div>Board Thickness: {round(g.actualT / unitFactor)} {unitLabel}</div>
-        </div>
+        
 
         {g.warnings.length > 0 && (
           <div
